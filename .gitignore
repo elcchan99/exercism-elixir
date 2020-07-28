@@ -1,0 +1,6 @@
+.elixir_ls
+.exercism/
+_build/
+test/
+mix.exs
+.formatter.exs
