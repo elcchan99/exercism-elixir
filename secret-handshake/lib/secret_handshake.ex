@@ -13,7 +13,29 @@ defmodule SecretHandshake do
 
   10000 = Reverse the order of the operations in the secret handshake
   """
-  @spec commands(code :: integer) :: list(String.t())
-  def commands(code) do
+  use Bitwise
+
+  defguard is_bits_match(code, bits) when (code &&& bits) == bits
+
+  def commands(code) when is_bits_match(code, 16) do
+    commands(code &&& bnot(16)) |> Enum.reverse()
   end
+
+  def commands(code) when is_bits_match(code, 1) do
+    ["wink" | commands(code &&& bnot(1))]
+  end
+
+  def commands(code) when is_bits_match(code, 2) do
+    ["double blink" | commands(code &&& bnot(2))]
+  end
+
+  def commands(code) when is_bits_match(code, 4) do
+    ["close your eyes" | commands(code &&& bnot(4))]
+  end
+
+  def commands(code) when is_bits_match(code, 8) do
+    ["jump" | commands(code &&& bnot(8))]
+  end
+
+  def commands(_), do: []
 end
