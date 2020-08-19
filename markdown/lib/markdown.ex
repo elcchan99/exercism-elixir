@@ -119,12 +119,18 @@ defmodule Markdown do
   end
 
   defmodule Text do
+    @text_styles [{~r/__(.*)__/U, :bold}, {~r/_(.*)_/U, :italic}]
+
+    def to_html({:bold, line}), do:  line |> Bold.to_html() |> to_html()
+    def to_html({:italic, line}), do:  line |> Italic.to_html() |> to_html()
+    def to_html({_, line}), do:  line
+
+    # Ref: https://elixirforum.com/t/simulate-regex-match-guards-in-functions/675/2
     def to_html(line) do
-      cond do
-        Bold.type?(line) -> line |> Bold.to_html() |> to_html()
-        Italic.type?(line) -> line |> Italic.to_html() |> to_html()
-        true -> line
-      end
+      {_, type} = Enum.find(@text_styles, {nil, ""}, fn {reg, _} ->
+        String.match?(line, reg)
+      end)
+      to_html({type, line})
     end
   end
 
@@ -132,21 +138,13 @@ defmodule Markdown do
   def parse(m) do
     m
     |> String.split("\n")
-    |> Enum.map(&to_html(&1))
-    |> Enum.join()
-    |> patch()
-  end
-
-  defp to_html(line) do
-    cond do
-      Header.type?(line) -> line |> Header.to_html()
-      List.type?(line) -> line |> List.to_html() |> Text.to_html()
-      true -> line |> Paragraph.to_html() |> Text.to_html()
-    end
-  end
-
-  defp patch(html) do
-    html
+    |> Enum.map_join("", &to_html(&1))
     |> List.patch_unorder_tag()
   end
+
+  defp to_html(line = "#" <> _), do: line |> Header.to_html()
+
+  defp to_html(line = "*" <> _), do: line |> List.to_html() |> Text.to_html()
+
+  defp to_html(line),  do: line |> Paragraph.to_html() |> Text.to_html()
 end
