@@ -49,7 +49,20 @@ defmodule Forth do
 
   defp strip(s, keep_chars), do: Regex.replace(~r/[^\dA-Z+-\/\*:;#{keep_chars}]/, s, " ")
 
-  defp tokenize(s), do: String.split(s)
+  defp tokenize(s), do: String.split(s) |> Enum.map(&parse_int_if_numeric/1)
+
+  defp parse_int_if_numeric(s) do
+    case numeric?(s) do
+      true ->
+        {val, _} = Integer.parse(s)
+        val
+
+      false ->
+        s
+    end
+  end
+
+  defp numeric?(s) when is_binary(s), do: Regex.match?(~r/\d+/, s)
 
   defp translate(stacks, dictionary) do
     stacks |> Enum.flat_map(&translate_word(&1, dictionary))
@@ -67,21 +80,15 @@ defmodule Forth do
   defp do_eval_word([], buffer), do: buffer
   defp do_eval_word([head | tail], buffer), do: do_eval_word(tail, [head | buffer])
 
-  defp do_eval_word(%{dictionary: dictionary} = ev, [word | tail]) do
-    case numeric?(word) do
-      true ->
-        raise Forth.InvalidWord
-
-      _ ->
-        word_def = do_eval_word(tail, [])
-        new_dictionary = Map.put(dictionary, word, word_def)
-        %{ev | dictionary: new_dictionary}
-    end
+  defp do_eval_word(%{dictionary: dictionary} = ev, [word | tail]) when is_binary(word) do
+    word_def = do_eval_word(tail, [])
+    new_dictionary = Map.put(dictionary, word, word_def)
+    %{ev | dictionary: new_dictionary}
   end
 
-  # helper functions
-  defp numeric?(s) when is_binary(s), do: Regex.match?(~r/\d+/, s)
+  defp do_eval_word(_, _), do: raise(Forth.InvalidWord)
 
+  # helper functions
   @spec take_one_and_compute(List.t(), (String.t(), List.t() -> List.t())) :: List.t()
   defp take_one_and_compute([value | stack], compute), do: compute.(value, stack)
   defp take_one_and_compute(_, _), do: raise(Forth.StackUnderflow)
@@ -92,41 +99,31 @@ defmodule Forth do
 
   defp take_two_and_compute(_, _), do: raise(Forth.StackUnderflow)
 
-  defp calculate(arg_1, arg_2, func) do
-    func.(parse_as_int(arg_1), parse_as_int(arg_2))
-    |> Integer.to_string()
-  end
-
-  defp parse_as_int(arg) do
-    {int_arg, _} = Integer.parse(arg)
-    int_arg
-  end
-
   # integer arithmetic
   @spec do_operate(String.t(), List.t()) :: List.t()
   defp do_operate("+", stack) do
     take_two_and_compute(stack, fn val1, val2, stack ->
-      [calculate(val1, val2, &+/2) | stack]
+      [val1 + val2 | stack]
     end)
   end
 
   defp do_operate("-", stack) do
     take_two_and_compute(stack, fn val1, val2, stack ->
-      [calculate(val1, val2, &-/2) | stack]
+      [val1 - val2 | stack]
     end)
   end
 
   defp do_operate("*", stack) do
     take_two_and_compute(stack, fn val1, val2, stack ->
-      [calculate(val1, val2, &*/2) | stack]
+      [val1 * val2 | stack]
     end)
   end
 
-  defp do_operate("/", ["0" | [_ | _]]), do: raise(Forth.DivisionByZero)
+  defp do_operate("/", [0 | [_ | _]]), do: raise(Forth.DivisionByZero)
 
   defp do_operate("/", stack) do
     take_two_and_compute(stack, fn val1, val2, stack ->
-      [calculate(val1, val2, &div/2) | stack]
+      [div(val1, val2) | stack]
     end)
   end
 
@@ -147,20 +144,14 @@ defmodule Forth do
     take_two_and_compute(stack, fn val1, val2, stack -> [val1 | [val2 | [val1 | stack]]] end)
   end
 
-  defp do_operate(value, stack) do
-    case numeric?(value) do
-      true -> [value | stack]
-      false -> raise Forth.UnknownWord
-    end
-  end
+  defp do_operate(value, stack) when is_integer(value), do: [value | stack]
+  defp do_operate(_, _), do: raise(Forth.UnknownWord)
 
   @doc """
   Return the current stack as a string with the element on top of the stack
   being the rightmost element in the string.
   """
   @spec format_stack(evaluator) :: String.t()
-  def format_stack(%{stack: []}), do: ""
-
   def format_stack(%{stack: stack}) do
     stack |> Enum.reverse() |> Enum.join(" ")
   end
