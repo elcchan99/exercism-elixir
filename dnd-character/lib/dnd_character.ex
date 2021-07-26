@@ -10,40 +10,40 @@ defmodule DndCharacter do
         }
 
   @dice 6
-  @abilities [:strength, :dexterity, :constitution, :intelligence, :wisdom, :charisma]
+  @abilities [:strength, :dexterity, :constitution, :intelligence, :wisdom, :charisma, :hitpoints]
 
   defstruct ~w[strength dexterity constitution intelligence wisdom charisma hitpoints]a
 
   @spec modifier(pos_integer()) :: integer()
   def modifier(score) do
-    (score - 10) / 2 |> floor()
+    ((score - 10) / 2) |> floor()
   end
 
   @spec ability :: pos_integer()
   def ability do
     1..4
-      |> Enum.map(fn _ -> throw_dice() end)
-      |> Enum.sort()
-      |> Enum.reverse()
-      |> Enum.take(3)
-      |> Enum.sum()
+    |> Enum.map(fn _ -> throw_dice() end)
+    |> Enum.sort()
+    |> Enum.drop(1)
+    |> Enum.sum()
   end
 
   @spec character :: t()
   def character do
-    character(%DndCharacter{}, @abilities)
+    %__MODULE__{}
+    |> set_abilities(@abilities)
   end
 
-  def character(char, [name | rest]) when name != :hitpoints do
-    char = set_ability(char, name)
-    character(char, rest)
+  def set_abilities(char, [name | rest]) do
+    char
+    |> set_ability(name)
+    |> set_abilities(rest)
   end
 
-  def character(char, []), do: char
+  def set_abilities(char, []), do: char
 
-  defp set_ability(char, :constitution) do
-    char = char |> Map.put(:constitution, ability())
-    char |> Map.put(:hitpoints, hitpoints(char))
+  defp set_ability(char, :hitpoints = name) do
+    char |> Map.put(name, hitpoints(char))
   end
 
   defp set_ability(char, name) do
